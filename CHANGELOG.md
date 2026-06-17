@@ -1,5 +1,26 @@
 # Changelog
 
+
+## v0.1.1 - 2026-06-17
+
+### Changed
+
+- Added userscript metadata for better update support:
+  - `@homepageURL`
+  - `@supportURL`
+  - `@updateURL`
+  - `@downloadURL`
+- Bumped `Zhihu Question Opportunity Score` from `1.5` to `1.5.1`.
+- Bumped `Zhihu Content Quality Score` from `1.3` to `1.3.1`.
+
+### Notes
+
+This update improves update detection in Tampermonkey / Violentmonkey.
+
+No major feature changes.
+
+
+
 ## v0.1.0
 
 首次发布。
