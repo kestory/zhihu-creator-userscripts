@@ -1,5 +1,16 @@
 # Zhihu Creator Userscripts
 
+<p align="center">
+  <img src="https://img.shields.io/github/stars/kestory/zhihu-creator-userscripts?style=flat-square" />
+  <img src="https://img.shields.io/github/forks/kestory/zhihu-creator-userscripts?style=flat-square" />
+  <img src="https://img.shields.io/github/license/kestory/zhihu-creator-userscripts?style=flat-square" />
+  <img src="https://img.shields.io/github/last-commit/kestory/zhihu-creator-userscripts?style=flat-square" />
+  <img src="https://img.shields.io/github/release/kestory/zhihu-creator-userscripts?style=flat-square" />
+  <img src="https://img.shields.io/badge/Tampermonkey-supported-00485B?style=flat-square" />
+  <img src="https://img.shields.io/badge/Zhihu-Creator%20Tools-1677FF?style=flat-square" />
+</p>
+
+
 Tampermonkey userscripts for Zhihu creators: question opportunity scoring and content quality scoring.
 
 知乎创作效率工具箱：一组面向知乎创作者的油猴脚本，帮助你判断哪些问题值得回答，以及评估自己回答的互动质量。
@@ -228,6 +239,11 @@ https://www.zhihu.com/creator/manage/creation*
 脚本提供的所有分数都只是辅助指标，不构成任何创作、运营、商业或投资建议。
 
 请合理使用，并遵守知乎平台规则。
+
+## Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=kestory/zhihu-creator-userscripts&type=Date)](https://www.star-history.com/#kestory/zhihu-creator-userscripts&Date)
+
 
 ## License
 
