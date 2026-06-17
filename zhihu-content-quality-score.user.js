@@ -1,11 +1,12 @@
 // ==UserScript==
 // @name         知乎内容质量分 Simple
-// @namespace    https://chat.openai.com/
+// @namespace    https://github.com/kestory/zhihu-creator-userscripts
 // @version      1.3
 // @description  在知乎创作中心内容管理页显示简单质效分
 // @match        *://www.zhihu.com/creator/manage/creation*
 // @run-at       document-idle
 // @grant        none
+// @license      MIT
 // ==/UserScript==
 
 (function () {
