@@ -7,6 +7,10 @@
 // @run-at       document-idle
 // @grant        none
 // @license      MIT
+// @homepageURL  https://github.com/kestory/zhihu-creator-userscripts
+// @supportURL   https://github.com/kestory/zhihu-creator-userscripts/issues
+// @updateURL    https://raw.githubusercontent.com/kestory/zhihu-creator-userscripts/main/scripts/zhihu-content-quality-score.user.js
+// @downloadURL  https://raw.githubusercontent.com/kestory/zhihu-creator-userscripts/main/scripts/zhihu-content-quality-score.user.js
 // ==/UserScript==
 
 (function () {
