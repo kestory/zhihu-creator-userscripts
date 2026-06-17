@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         知乎问题机会分 Pro
-// @namespace    https://chat.openai.com/
+// @namespace    https://github.com/kestory/zhihu-creator-userscripts
 // @version      1.5
 // @description  在知乎创作中心和普通问题页显示“缺口值”和“答题分”，用颜色标记极高/高/中/低机会
 // @match        *://www.zhihu.com/creator*
@@ -8,6 +8,7 @@
 // @match        *://www.zhihu.com/question/*
 // @run-at       document-idle
 // @grant        none
+// @license      MIT
 // ==/UserScript==
 
 (function () {
