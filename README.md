@@ -242,8 +242,14 @@ https://www.zhihu.com/creator/manage/creation*
 
 ## Star History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=kestory/zhihu-creator-userscripts&type=Date)](https://www.star-history.com/#kestory/zhihu-creator-userscripts&Date)
 
+<a href="https://www.star-history.com/?type=date&repos=kestory%2Fzhihu-creator-userscripts">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=kestory/zhihu-creator-userscripts&type=date&theme=dark&legend=top-left&sealed_token=QeTWQTPqsuAxH38h2sl-JR_6jfBdAm0jp6b0FZAlqXbKRI_-aat7mkwuFY4R01bh-7uZmcPsQtlntIgN-RVI3RV0_SRkqJHTVn1Vyt61_4MjW2BRDD8jYKeiyozr2_dci5e7Ouj9mukZYVyyqjQL5ixsgG6hF1dFTlrQdwt_8aA_SS5fnJbeZ7G_PGMi" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=kestory/zhihu-creator-userscripts&type=date&legend=top-left&sealed_token=QeTWQTPqsuAxH38h2sl-JR_6jfBdAm0jp6b0FZAlqXbKRI_-aat7mkwuFY4R01bh-7uZmcPsQtlntIgN-RVI3RV0_SRkqJHTVn1Vyt61_4MjW2BRDD8jYKeiyozr2_dci5e7Ouj9mukZYVyyqjQL5ixsgG6hF1dFTlrQdwt_8aA_SS5fnJbeZ7G_PGMi" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=kestory/zhihu-creator-userscripts&type=date&legend=top-left&sealed_token=QeTWQTPqsuAxH38h2sl-JR_6jfBdAm0jp6b0FZAlqXbKRI_-aat7mkwuFY4R01bh-7uZmcPsQtlntIgN-RVI3RV0_SRkqJHTVn1Vyt61_4MjW2BRDD8jYKeiyozr2_dci5e7Ouj9mukZYVyyqjQL5ixsgG6hF1dFTlrQdwt_8aA_SS5fnJbeZ7G_PGMi" />
+ </picture>
+</a>
 
 ## License
 
