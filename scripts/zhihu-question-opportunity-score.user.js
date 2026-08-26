@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         知乎问题机会分 Pro
 // @namespace    https://github.com/kestory/zhihu-creator-userscripts
-// @version      1.6.2
-// @description  在知乎创作中心和问题页显示缺口值与答题分（适配新版知乎 UI）
+// @version      1.6.3
+// @description  在知乎创作中心和新版问题/回答页显示缺口值与答题分
 // @match        *://www.zhihu.com/creator*
 // @match        *://creator.zhihu.com/*
 // @match        *://www.zhihu.com/question/*
@@ -26,8 +26,8 @@
     defaultAgeDays: 180
   };
 
-  const STYLE_ID = 'zh-opportunity-style';
-  const ROW_ID = 'zh-opportunity-question-row';
+  const STYLE_ID = 'zh-opportunity-style-v163';
+  const FLOAT_ID = 'zh-opportunity-question-float';
 
   let lastPath = location.pathname;
   let timer = null;
@@ -41,7 +41,10 @@
 
   const isQuestionPage = () =>
     location.hostname === 'www.zhihu.com' &&
-    location.pathname.startsWith('/question/');
+    /^\/question\/\d+/.test(location.pathname);
+
+  const questionId = () =>
+    location.pathname.match(/^\/question\/(\d+)/)?.[1] || '';
 
 
   // =========================
@@ -55,35 +58,39 @@
     style.id = STYLE_ID;
 
     style.textContent = `
-      .zh-opportunity-badge {
+      .zh-opportunity-pill {
         display: inline-flex;
         align-items: center;
         gap: 5px;
         white-space: nowrap;
+
         border: 1px solid transparent;
         border-radius: 999px;
-        padding: 4px 9px;
+
+        padding: 5px 10px;
+
         font-size: 12px;
         font-weight: 700;
         line-height: 1.25;
       }
 
+      #${FLOAT_ID} {
+        position: fixed;
+        top: 150px;
+        right: 28px;
+        z-index: 9999;
+
+        box-shadow: 0 2px 10px rgba(0, 0, 0, .08);
+      }
+
       .zh-opportunity-inline {
         margin-left: 8px;
         vertical-align: middle;
-      }
-
-      #${ROW_ID} {
-        display: flex;
-        justify-content: flex-end;
-        align-items: center;
-        width: 100%;
-        box-sizing: border-box;
-        padding: 10px 0 8px;
+        padding: 3px 8px;
       }
 
       .zh-opportunity-sep {
-        opacity: 0.5;
+        opacity: .5;
       }
 
       .zh-opportunity-strong {
@@ -94,7 +101,7 @@
         margin-left: 2px;
         font-size: 11px;
         font-weight: 800;
-        opacity: 0.9;
+        opacity: .9;
       }
 
       .zh-opportunity-extreme {
@@ -120,6 +127,13 @@
         background: #f8fafc;
         border-color: #94a3b855;
       }
+
+      @media (max-width: 900px) {
+        #${FLOAT_ID} {
+          top: 120px;
+          right: 12px;
+        }
+      }
     `;
 
     document.head.appendChild(style);
@@ -127,12 +141,14 @@
 
 
   // =========================
-  // 数字解析
+  // 数字
   // =========================
 
   function parseNumber(raw, unit = '') {
     const n = Number.parseFloat(
-      String(raw).replace(/,/g, '').trim()
+      String(raw ?? '')
+        .replace(/,/g, '')
+        .trim()
     );
 
     if (!Number.isFinite(n)) return null;
@@ -143,141 +159,64 @@
     return n;
   }
 
-  function readMetric(text, label) {
+  function metric(text, label) {
+    const s = String(text || '');
+
     const patterns = [
       new RegExp(
         `([\\d,.]+)\\s*([万亿]?)\\s*(?:个|次|人)?\\s*${label}`
       ),
+
       new RegExp(
         `${label}\\s*[:：]?\\s*([\\d,.]+)\\s*([万亿]?)`
       )
     ];
 
     for (const re of patterns) {
-      const m = String(text).match(re);
+      const m = s.match(re);
 
       if (m) {
-        return parseNumber(m[1], m[2]);
+        return parseNumber(
+          m[1],
+          m[2]
+        );
       }
     }
 
     return null;
   }
 
-  function readAnswers(text) {
-    const m = String(text).match(
-      /([\d,.]+)\s*([万亿]?)\s*个回答/
-    );
-
-    return m
-      ? parseNumber(m[1], m[2])
-      : null;
-  }
-
-  function trimNumber(n, digits) {
-    return Number(n.toFixed(digits)).toString();
-  }
-
   function formatNumber(n) {
-    if (!Number.isFinite(n)) return '-';
+    if (!Number.isFinite(n)) {
+      return '-';
+    }
+
+    const tidy = (x, digits) =>
+      Number(
+        x.toFixed(digits)
+      ).toString();
 
     if (n >= 100000000) {
-      return `${trimNumber(n / 100000000, 2)}亿`;
+      return `${tidy(
+        n / 100000000,
+        2
+      )}亿`;
     }
 
     if (n >= 10000) {
-      return `${trimNumber(n / 10000, 1)}万`;
+      return `${tidy(
+        n / 10000,
+        1
+      )}万`;
     }
 
     if (n >= 1000) {
-      return Math.round(n).toLocaleString();
+      return Math
+        .round(n)
+        .toLocaleString();
     }
 
-    return trimNumber(n, 1);
-  }
-
-
-  // =========================
-  // 问题时间
-  // =========================
-
-  function getQuestionAgeDays() {
-    const qid =
-      location.pathname.match(
-        /^\/question\/(\d+)/
-      )?.[1];
-
-    if (!qid) {
-      return CFG.defaultAgeDays;
-    }
-
-    const sources = [];
-
-    const initial =
-      document.getElementById(
-        'js-initialData'
-      )?.textContent;
-
-    if (initial) {
-      sources.push(initial);
-    }
-
-    for (const script of document.scripts) {
-      const text =
-        script.textContent || '';
-
-      if (
-        text.includes(qid) &&
-        text.includes('created')
-      ) {
-        sources.push(text);
-      }
-
-      if (sources.length >= 4) {
-        break;
-      }
-    }
-
-    for (const text of sources) {
-      const index =
-        text.indexOf(qid);
-
-      const chunk =
-        index >= 0
-          ? text.slice(
-              Math.max(0, index - 8000),
-              index + 12000
-            )
-          : text;
-
-      const m =
-        chunk.match(
-          /"created"\s*:\s*(\d{10,13})/
-        );
-
-      if (!m) continue;
-
-      let ts = Number(m[1]);
-
-      if (ts > 1000000000000) {
-        ts /= 1000;
-      }
-
-      const days =
-        (
-          Date.now() -
-          ts * 1000
-        ) / 86400000;
-
-      if (
-        days >= 0 &&
-        days < 10000
-      ) {
-        return days;
-      }
-    }
-
-    return CFG.defaultAgeDays;
+    return tidy(n, 1);
   }
 
 
@@ -435,7 +374,7 @@
       );
 
     badge.className =
-      `zh-opportunity-badge ${className}` +
+      `zh-opportunity-pill ${className}` +
       (
         compact
           ? ' zh-opportunity-inline'
@@ -443,11 +382,25 @@
       );
 
     badge.title = [
-      `浏览数：${Math.round(views).toLocaleString()}`,
-      `回答数：${Math.round(answers).toLocaleString()}`,
-      `关注数：${Math.round(follows).toLocaleString()}`,
-      `缺口值：${formatNumber(gap)}`,
-      `答题分：${score.toFixed(1)}`
+      `浏览数：${Math.round(
+        views
+      ).toLocaleString()}`,
+
+      `回答数：${Math.round(
+        answers
+      ).toLocaleString()}`,
+
+      `关注数：${Math.round(
+        follows
+      ).toLocaleString()}`,
+
+      `缺口值：${formatNumber(
+        gap
+      )}`,
+
+      `答题分：${score.toFixed(
+        1
+      )}`
     ].join('\n');
 
     badge.innerHTML = `
@@ -462,8 +415,13 @@
       <span>
         缺口
         <span class="zh-opportunity-strong">
-          ${formatNumber(gap)}
+          ${
+            answers > 0
+              ? formatNumber(gap)
+              : '无回答'
+          }
         </span>
+
         <span class="zh-opportunity-small">
           ${gapLevel(gap)}
         </span>
@@ -475,9 +433,11 @@
 
       <span>
         答题${compact ? '' : '分'}
+
         <span class="zh-opportunity-strong">
           ${score.toFixed(0)}
         </span>
+
         <span class="zh-opportunity-small">
           ${level}
         </span>
@@ -489,91 +449,169 @@
 
 
   // =========================
-  // 最新版知乎问题页
+  // 知乎隐藏问题数据
   // =========================
 
-  function findQuestionStats() {
+  function hasQuestionMetrics(obj) {
+    return (
+      obj &&
+      typeof obj === 'object' &&
+      [
+        'answerCount',
+        'followerCount',
+        'visitCount',
+        'viewCount'
+      ].some(
+        key =>
+          Object.prototype
+            .hasOwnProperty
+            .call(obj, key)
+      )
+    );
+  }
+
+  function isQuestionObject(
+    obj,
+    qid
+  ) {
+    if (!hasQuestionMetrics(obj)) {
+      return false;
+    }
+
+    return (
+      String(
+        obj.id ?? ''
+      ) === qid ||
+
+      String(
+        obj.url ?? ''
+      ).includes(
+        `/question/${qid}`
+      )
+    );
+  }
+
+  function readInitialQuestion() {
+    const qid =
+      questionId();
+
+    const raw =
+      document
+        .getElementById(
+          'js-initialData'
+        )
+        ?.textContent;
+
+    if (
+      !qid ||
+      !raw
+    ) {
+      return null;
+    }
+
+    try {
+      const root =
+        JSON.parse(raw);
+
+      const stack = [
+        root
+      ];
+
+      const seen =
+        new Set();
+
+      let steps = 0;
+
+      while (
+        stack.length &&
+        steps++ < 30000
+      ) {
+        const obj =
+          stack.pop();
+
+        if (
+          !obj ||
+          typeof obj !== 'object' ||
+          seen.has(obj)
+        ) {
+          continue;
+        }
+
+        seen.add(obj);
+
+        /*
+         * 知乎常见结构：
+         * questions: {
+         *   "问题ID": {...}
+         * }
+         */
+        if (
+          Object.prototype
+            .hasOwnProperty
+            .call(obj, qid)
+        ) {
+          const candidate =
+            obj[qid];
+
+          if (
+            hasQuestionMetrics(
+              candidate
+            )
+          ) {
+            return candidate;
+          }
+        }
+
+        if (
+          isQuestionObject(
+            obj,
+            qid
+          )
+        ) {
+          return obj;
+        }
+
+        for (
+          const value
+          of Object.values(obj)
+        ) {
+          if (
+            value &&
+            typeof value === 'object'
+          ) {
+            stack.push(value);
+          }
+        }
+      }
+    } catch (_) {}
+
+    return null;
+  }
+
+
+  // =========================
+  // 新版页面文本 fallback
+  // =========================
+
+  function findStatsText() {
     const candidates =
       Array.from(
         document.querySelectorAll(
           'div, span, section, header, nav'
         )
       )
-        .map(el => {
-          const text =
-            (
-              el.innerText || ''
-            ).trim();
-
-          if (
-            !text ||
-            text.length > 220 ||
-            !text.includes('关注') ||
-            !text.includes('浏览')
-          ) {
-            return null;
-          }
-
-          const follows =
-            readMetric(
-              text,
-              '关注'
-            );
-
-          const views =
-            readMetric(
-              text,
-              '浏览'
-            );
-
-          if (
-            follows === null ||
-            views === null
-          ) {
-            return null;
-          }
-
-          return {
-            el,
-            text,
-            follows,
-            views
-          };
-        })
-        .filter(Boolean)
-        .sort(
-          (a, b) =>
-            a.text.length -
-            b.text.length
-        );
-
-    return candidates[0] || null;
-  }
-
-  function findAnswerAnchor() {
-    const root =
-      document.querySelector(
-        'main'
-      ) || document;
-
-    const candidates =
-      Array.from(
-        root.querySelectorAll(
-          'h1, h2, h3, div, span, p'
-        )
-      )
         .map(el => ({
-          el,
           text:
             (
               el.innerText || ''
             ).trim()
         }))
         .filter(
-          item =>
-            item.text.length <= 30 &&
-            /^([\d,.]+)\s*([万亿]?)\s*个回答$/
-              .test(item.text)
+          x =>
+            x.text &&
+            x.text.length <= 240 &&
+            x.text.includes('关注') &&
+            x.text.includes('浏览')
         )
         .sort(
           (a, b) =>
@@ -581,116 +619,246 @@
             b.text.length
         );
 
-    return candidates[0] || null;
+    return (
+      candidates[0]?.text ||
+      ''
+    );
   }
 
-  function cleanupQuestionPage() {
-    /*
-     * 清掉旧版本曾经塞进顶部操作栏的胶囊。
-     * 当前版本自己的胶囊位于 ROW_ID 中，不删除。
-     */
-    document
-      .querySelectorAll(
-        '.zh-opportunity-question-badge, .zh-opportunity-badge'
+  function findAnswerCountFromPage() {
+    const root =
+      document.querySelector(
+        'main'
+      ) ||
+      document.body;
+
+    const texts =
+      Array.from(
+        root.querySelectorAll(
+          'h1,h2,h3,div,span,p,a,button'
+        )
       )
-      .forEach(el => {
+        .map(
+          el =>
+            (
+              el.innerText || ''
+            ).trim()
+        )
+        .filter(
+          text =>
+            text &&
+            text.length <= 50
+        );
+
+    for (const text of texts) {
+      let m =
+        text.match(
+          /^([\d,.]+)\s*([万亿]?)\s*个回答$/
+        );
+
+      if (!m) {
+        m =
+          text.match(
+            /查看全部\s*([\d,.]+)\s*([万亿]?)\s*个回答/
+          );
+      }
+
+      if (m) {
+        return parseNumber(
+          m[1],
+          m[2]
+        );
+      }
+    }
+
+    return null;
+  }
+
+
+  // =========================
+  // 获取问题数据
+  // =========================
+
+  function questionData() {
+    const q =
+      readInitialQuestion();
+
+    const statsText =
+      findStatsText();
+
+    const field = (
+      obj,
+      names
+    ) => {
+      for (
+        const name
+        of names
+      ) {
+        const n =
+          Number(
+            obj?.[name]
+          );
+
         if (
-          !el.closest(
-            `#${ROW_ID}`
-          )
+          Number.isFinite(n)
         ) {
-          el.remove();
+          return n;
         }
-      });
-  }
+      }
 
-  function processQuestionPage() {
-    cleanupQuestionPage();
+      return null;
+    };
+
+    const views =
+      field(
+        q,
+        [
+          'visitCount',
+          'viewCount'
+        ]
+      ) ??
+      metric(
+        statsText,
+        '浏览'
+      );
+
+    const follows =
+      field(
+        q,
+        [
+          'followerCount',
+          'followCount'
+        ]
+      ) ??
+      metric(
+        statsText,
+        '关注'
+      );
 
     /*
-     * 已经显示，就不要再生成第二个。
+     * 回答详情页即使没有
+     * “64 个回答”标题，
+     * 也优先从隐藏问题对象读 answerCount。
      */
-    if (
-      document.getElementById(
-        ROW_ID
-      )
-    ) {
-      return;
-    }
-
-    const stats =
-      findQuestionStats();
-
-    const answer =
-      findAnswerAnchor();
-
-    if (
-      !stats ||
-      !answer
-    ) {
-      return;
-    }
-
     const answers =
-      readAnswers(
-        answer.text
+      field(
+        q,
+        [
+          'answerCount'
+        ]
+      ) ??
+      findAnswerCountFromPage();
+
+    let ageDays =
+      CFG.defaultAgeDays;
+
+    const created =
+      Number(
+        q?.created ??
+        q?.createdTime
       );
 
     if (
-      answers === null ||
-      stats.views <= 0
+      Number.isFinite(created) &&
+      created > 0
     ) {
+      const ms =
+        created >
+        1000000000000
+          ? created
+          : created * 1000;
+
+      const days =
+        (
+          Date.now() -
+          ms
+        ) /
+        86400000;
+
+      if (
+        days >= 0 &&
+        days < 10000
+      ) {
+        ageDays =
+          days;
+      }
+    }
+
+    if (
+      views === null ||
+      follows === null ||
+      answers === null ||
+      views <= 0
+    ) {
+      return null;
+    }
+
+    return {
+      views,
+      follows,
+      answers,
+      ageDays
+    };
+  }
+
+
+  // =========================
+  // 问题页 + 回答详情页
+  // =========================
+
+  function cleanupOldQuestionBadges() {
+    document
+      .querySelectorAll(
+        [
+          '.zh-opportunity-question-badge',
+          '.zh-opportunity-badge',
+          '#zh-opportunity-question-row',
+          '#zh-opportunity-question-page-row'
+        ].join(',')
+      )
+      .forEach(
+        el =>
+          el.remove()
+      );
+  }
+
+  function processQuestionPage() {
+    cleanupOldQuestionBadges();
+
+    /*
+     * 已存在就不再添加，
+     * 确保永远只有一个。
+     */
+    if (
+      document.getElementById(
+        FLOAT_ID
+      )
+    ) {
+      return;
+    }
+
+    const data =
+      questionData();
+
+    if (!data) {
       return;
     }
 
     const badge =
-      makeBadge({
-        views:
-          stats.views,
+      makeBadge(data);
 
-        answers,
-
-        follows:
-          stats.follows,
-
-        ageDays:
-          getQuestionAgeDays()
-      });
-
-    const row =
-      document.createElement(
-        'div'
-      );
-
-    row.id =
-      ROW_ID;
-
-    row.appendChild(
-      badge
-    );
+    badge.id =
+      FLOAT_ID;
 
     /*
-     * 关键：
-     * 胶囊不再放进顶部“关注/浏览/分享”操作栏。
+     * 直接挂 body，
+     * position: fixed。
      *
-     * 而是作为独立一行，
-     * 插在“XX 个回答”标题之前。
+     * 不进入知乎 flex/grid，
+     * 所以不会挤压任何原生内容。
      */
-    const host =
-      answer.el.closest(
-        '.List-header, [class*="List-header"]'
-      ) ||
-      answer.el;
-
-    if (
-      !host.parentElement
-    ) {
-      return;
-    }
-
-    host.parentElement.insertBefore(
-      row,
-      host
+    document.body.appendChild(
+      badge
     );
   }
 
@@ -699,9 +867,56 @@
   // 创作中心
   // =========================
 
-  function readCreatorMetrics(
-    text
-  ) {
+  function parseAgeDays(text) {
+    const m =
+      String(
+        text || ''
+      ).match(
+        /([\d.]+)\s*(分钟|小时|天|个月|月|年)前/
+      );
+
+    if (!m) {
+      return null;
+    }
+
+    const n =
+      Number(m[1]);
+
+    if (
+      !Number.isFinite(n)
+    ) {
+      return null;
+    }
+
+    if (
+      m[2] === '分钟'
+    ) {
+      return n / 1440;
+    }
+
+    if (
+      m[2] === '小时'
+    ) {
+      return n / 24;
+    }
+
+    if (
+      m[2] === '天'
+    ) {
+      return n;
+    }
+
+    if (
+      m[2] === '个月' ||
+      m[2] === '月'
+    ) {
+      return n * 30;
+    }
+
+    return n * 365;
+  }
+
+  function creatorMetrics(text) {
     if (
       !text ||
       text.length > 260
@@ -710,19 +925,19 @@
     }
 
     const views =
-      readMetric(
+      metric(
         text,
         '浏览'
       );
 
     const follows =
-      readMetric(
+      metric(
         text,
         '关注'
       );
 
     const answers =
-      readMetric(
+      metric(
         text,
         '回答'
       );
@@ -730,7 +945,8 @@
     if (
       views === null ||
       follows === null ||
-      answers === null
+      answers === null ||
+      views <= 0
     ) {
       return null;
     }
@@ -761,50 +977,47 @@
           el.innerText || ''
         ).trim();
 
-      const metrics =
-        readCreatorMetrics(
-          text
-        );
+      const data =
+        creatorMetrics(text);
 
-      if (
-        !metrics ||
-        metrics.views <= 0
-      ) {
+      if (!data) {
         continue;
       }
 
-      const childAlreadyMatches =
+      const hasMetricChild =
         Array.from(
           el.children
         ).some(
           child =>
-            Boolean(
-              readCreatorMetrics(
-                (
-                  child.innerText ||
-                  ''
-                ).trim()
-              )
+            creatorMetrics(
+              (
+                child.innerText ||
+                ''
+              ).trim()
             )
         );
 
       if (
-        childAlreadyMatches
+        hasMetricChild
       ) {
         continue;
       }
 
       el.appendChild(
         makeBadge({
-          ...metrics,
+          ...data,
+
           ageDays:
+            parseAgeDays(text) ??
             CFG.defaultAgeDays,
+
           compact: true
         })
       );
 
       el.dataset
-        .zhOpportunityDone = '1';
+        .zhOpportunityDone =
+        '1';
     }
   }
 
@@ -817,8 +1030,8 @@
     addStyle();
 
     /*
-     * 知乎 SPA 切换问题时，
-     * 删除上一题留下的胶囊。
+     * 知乎是 SPA。
+     * 切换问题/回答时删除旧数据。
      */
     if (
       location.pathname !==
@@ -826,7 +1039,7 @@
     ) {
       document
         .getElementById(
-          ROW_ID
+          FLOAT_ID
         )
         ?.remove();
 
