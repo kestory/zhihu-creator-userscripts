@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         知乎问题机会分 Pro
 // @namespace    https://github.com/kestory/zhihu-creator-userscripts
-// @version      1.6.0
-// @description  在知乎创作中心和普通问题页显示“缺口值”和“答题分”，兼容知乎新旧问题页布局
+// @version      1.6.2
+// @description  在知乎创作中心和问题页显示缺口值与答题分（适配新版知乎 UI）
 // @match        *://www.zhihu.com/creator*
 // @match        *://creator.zhihu.com/*
 // @match        *://www.zhihu.com/question/*
@@ -15,46 +15,38 @@
 // @downloadURL  https://raw.githubusercontent.com/kestory/zhihu-creator-userscripts/main/scripts/zhihu-question-opportunity-score.user.js
 // ==/UserScript==
 
-(function () {
+(() => {
   'use strict';
 
-  const CONFIG = {
-    ANSWER_EXTREME: 120,
-    ANSWER_HIGH: 75,
-    ANSWER_MID: 40,
-
-    GAP_EXTREME: 20000,
-    GAP_HIGH: 5000,
-    GAP_MID: 2000,
-
-    VOLUME_BASE: 100000,
-    FRESHNESS_BASE_DAYS: 365,
-
-    SHOW_AGE_IN_BADGE: false
+  const CFG = {
+    answer: { extreme: 120, high: 75, mid: 40 },
+    gap: { extreme: 20000, high: 5000, mid: 2000 },
+    volumeBase: 100000,
+    freshnessBaseDays: 365,
+    defaultAgeDays: 180
   };
 
-  const BADGE_ID = 'zh-opportunity-question-page-badge';
-  const STYLE_ID = 'zh-opportunity-style-pro';
+  const STYLE_ID = 'zh-opportunity-style';
+  const ROW_ID = 'zh-opportunity-question-row';
 
-  let lastQuestionPath = '';
+  let lastPath = location.pathname;
   let timer = null;
 
-  function isCreatorPage() {
-    return (
-      location.hostname === 'creator.zhihu.com' ||
-      (
-        location.hostname === 'www.zhihu.com' &&
-        location.pathname.startsWith('/creator')
-      )
-    );
-  }
-
-  function isQuestionPage() {
-    return (
+  const isCreatorPage = () =>
+    location.hostname === 'creator.zhihu.com' ||
+    (
       location.hostname === 'www.zhihu.com' &&
-      location.pathname.startsWith('/question/')
+      location.pathname.startsWith('/creator')
     );
-  }
+
+  const isQuestionPage = () =>
+    location.hostname === 'www.zhihu.com' &&
+    location.pathname.startsWith('/question/');
+
+
+  // =========================
+  // 样式
+  // =========================
 
   function addStyle() {
     if (document.getElementById(STYLE_ID)) return;
@@ -63,36 +55,35 @@
     style.id = STYLE_ID;
 
     style.textContent = `
-      .zh-opportunity-badge,
-      .zh-opportunity-question-badge {
+      .zh-opportunity-badge {
         display: inline-flex;
         align-items: center;
+        gap: 5px;
         white-space: nowrap;
         border: 1px solid transparent;
         border-radius: 999px;
+        padding: 4px 9px;
         font-size: 12px;
         font-weight: 700;
         line-height: 1.25;
+      }
+
+      .zh-opportunity-inline {
+        margin-left: 8px;
         vertical-align: middle;
       }
 
-      .zh-opportunity-badge {
-        gap: 4px;
-        margin-left: 8px;
-        padding: 3px 8px;
-        max-width: 280px;
-      }
-
-      .zh-opportunity-question-badge {
-        gap: 5px;
-        margin-left: 14px;
-        padding: 4px 9px;
-        flex-shrink: 0;
-        align-self: center;
+      #${ROW_ID} {
+        display: flex;
+        justify-content: flex-end;
+        align-items: center;
+        width: 100%;
+        box-sizing: border-box;
+        padding: 10px 0 8px;
       }
 
       .zh-opportunity-sep {
-        opacity: 0.55;
+        opacity: 0.5;
       }
 
       .zh-opportunity-strong {
@@ -100,10 +91,10 @@
       }
 
       .zh-opportunity-small {
+        margin-left: 2px;
         font-size: 11px;
         font-weight: 800;
         opacity: 0.9;
-        margin-left: 2px;
       }
 
       .zh-opportunity-extreme {
@@ -134,502 +125,201 @@
     document.head.appendChild(style);
   }
 
-  function escapeRegExp(s) {
-    return String(s).replace(
-      /[.*+?^${}()|[\]\\]/g,
-      '\\$&'
-    );
-  }
 
-  function toNumber(num, unit = '') {
-    if (
-      num === null ||
-      num === undefined ||
-      num === ''
-    ) {
-      return null;
-    }
+  // =========================
+  // 数字解析
+  // =========================
 
+  function parseNumber(raw, unit = '') {
     const n = Number.parseFloat(
-      String(num)
-        .replace(/,/g, '')
-        .replace(/\s/g, '')
+      String(raw).replace(/,/g, '').trim()
     );
 
-    if (!Number.isFinite(n)) {
-      return null;
-    }
+    if (!Number.isFinite(n)) return null;
 
-    if (unit === '万') {
-      return n * 10000;
-    }
-
-    if (unit === '亿') {
-      return n * 100000000;
-    }
+    if (unit === '亿') return n * 100000000;
+    if (unit === '万') return n * 10000;
 
     return n;
   }
 
-  /*
-   * 同时兼容：
-   *
-   * 64回答
-   * 64个回答
-   * 64 个回答
-   * 回答64
-   *
-   * 262关注
-   * 262 关注
-   * 关注者262
-   *
-   * 87.8万浏览
-   * 87.8 万浏览
-   * 被浏览87.8万
-   */
-  function extractMetric(text, labels) {
-    if (!text) return null;
-
-    for (const label of labels) {
-      const escapedLabel = escapeRegExp(label);
-
-      const patterns = [
-        new RegExp(
-          `([\\d,.]+)\\s*([万亿]?)\\s*(?:个|次|人)?\\s*${escapedLabel}`
-        ),
-
-        new RegExp(
-          `${escapedLabel}\\s*[:：]?\\s*([\\d,.]+)\\s*([万亿]?)`
-        )
-      ];
-
-      for (const re of patterns) {
-        const match = text.match(re);
-
-        if (!match) {
-          continue;
-        }
-
-        const value = toNumber(
-          match[1],
-          match[2]
-        );
-
-        if (value !== null) {
-          return value;
-        }
-      }
-    }
-
-    return null;
-  }
-
-  function parseAgeDays(text) {
-    const match = String(text || '').match(
-      /([\d.]+)\s*(分钟|小时|天|个月|月|年)前/
-    );
-
-    if (!match) {
-      return null;
-    }
-
-    const n = Number.parseFloat(match[1]);
-
-    if (!Number.isFinite(n)) {
-      return null;
-    }
-
-    const unit = match[2];
-
-    if (unit === '分钟') {
-      return n / 1440;
-    }
-
-    if (unit === '小时') {
-      return n / 24;
-    }
-
-    if (unit === '天') {
-      return n;
-    }
-
-    if (
-      unit === '个月' ||
-      unit === '月'
-    ) {
-      return n * 30;
-    }
-
-    if (unit === '年') {
-      return n * 365;
-    }
-
-    return null;
-  }
-
-  function daysFromTimestamp(ts) {
-    let n = Number(ts);
-
-    if (!Number.isFinite(n)) {
-      return null;
-    }
-
-    if (n > 1000000000000) {
-      n = Math.floor(n / 1000);
-    }
-
-    const min =
-      new Date('2008-01-01').getTime() / 1000;
-
-    const now =
-      Date.now() / 1000;
-
-    if (
-      n < min ||
-      n > now + 86400
-    ) {
-      return null;
-    }
-
-    const days =
-      (Date.now() - n * 1000) /
-      86400000;
-
-    if (
-      days < 0 ||
-      days > 10000
-    ) {
-      return null;
-    }
-
-    return days;
-  }
-
-  function daysFromDateString(s) {
-    if (!s) {
-      return null;
-    }
-
-    const time =
-      Date.parse(s);
-
-    if (!Number.isFinite(time)) {
-      return null;
-    }
-
-    const days =
-      (Date.now() - time) /
-      86400000;
-
-    if (
-      days < 0 ||
-      days > 10000
-    ) {
-      return null;
-    }
-
-    return days;
-  }
-
-  function extractQuestionAgeDays() {
-    const metaSelectors = [
-      'meta[itemprop="dateCreated"]',
-      'meta[itemprop="datePublished"]',
-      'meta[property="article:published_time"]',
-      'meta[name="date"]'
+  function readMetric(text, label) {
+    const patterns = [
+      new RegExp(
+        `([\\d,.]+)\\s*([万亿]?)\\s*(?:个|次|人)?\\s*${label}`
+      ),
+      new RegExp(
+        `${label}\\s*[:：]?\\s*([\\d,.]+)\\s*([万亿]?)`
+      )
     ];
 
-    for (const selector of metaSelectors) {
-      const content =
-        document
-          .querySelector(selector)
-          ?.getAttribute('content');
+    for (const re of patterns) {
+      const m = String(text).match(re);
 
-      const days =
-        daysFromDateString(content);
-
-      if (days !== null) {
-        return {
-          ageDays: days,
-          source: '页面时间'
-        };
+      if (m) {
+        return parseNumber(m[1], m[2]);
       }
     }
 
-    const qid =
-      location.pathname
-        .match(
-          /^\/question\/([^/?#]+)/
-        )?.[1] || '';
-
-    if (qid) {
-      const texts = [];
-
-      const initialData =
-        document.getElementById(
-          'js-initialData'
-        );
-
-      if (
-        initialData &&
-        initialData.textContent
-      ) {
-        texts.push(
-          initialData.textContent
-        );
-      }
-
-      for (
-        const script
-        of Array.from(document.scripts)
-      ) {
-        const text =
-          script.textContent || '';
-
-        if (
-          text.includes(qid) &&
-          text.includes('created')
-        ) {
-          texts.push(text);
-        }
-
-        if (texts.length >= 4) {
-          break;
-        }
-      }
-
-      for (const text of texts) {
-        const index =
-          text.indexOf(qid);
-
-        if (index < 0) {
-          continue;
-        }
-
-        const segment =
-          text.slice(
-            Math.max(
-              0,
-              index - 10000
-            ),
-            index + 15000
-          );
-
-        const patterns = [
-          /"created"\s*:\s*(\d{10,13})/g,
-          /"createdTime"\s*:\s*(\d{10,13})/g,
-          /"dateCreated"\s*:\s*"([^"]+)"/g,
-          /"datePublished"\s*:\s*"([^"]+)"/g
-        ];
-
-        for (const re of patterns) {
-          for (
-            const match
-            of segment.matchAll(re)
-          ) {
-            const days =
-              /^\d{10,13}$/.test(
-                match[1]
-              )
-                ? daysFromTimestamp(
-                    match[1]
-                  )
-                : daysFromDateString(
-                    match[1]
-                  );
-
-            if (days !== null) {
-              return {
-                ageDays: days,
-                source: '隐藏数据'
-              };
-            }
-          }
-        }
-      }
-    }
-
-    return {
-      ageDays: 180,
-      source: '默认估算'
-    };
+    return null;
   }
 
-  function trimZero(n, digits) {
-    return n
-      .toFixed(digits)
-      .replace(
-        /\.?0+$/,
-        ''
-      );
+  function readAnswers(text) {
+    const m = String(text).match(
+      /([\d,.]+)\s*([万亿]?)\s*个回答/
+    );
+
+    return m
+      ? parseNumber(m[1], m[2])
+      : null;
+  }
+
+  function trimNumber(n, digits) {
+    return Number(n.toFixed(digits)).toString();
   }
 
   function formatNumber(n) {
-    if (!Number.isFinite(n)) {
-      return '-';
-    }
+    if (!Number.isFinite(n)) return '-';
 
     if (n >= 100000000) {
-      return (
-        trimZero(
-          n / 100000000,
-          2
-        ) + '亿'
-      );
+      return `${trimNumber(n / 100000000, 2)}亿`;
     }
 
     if (n >= 10000) {
-      return (
-        trimZero(
-          n / 10000,
-          1
-        ) + '万'
-      );
+      return `${trimNumber(n / 10000, 1)}万`;
     }
 
     if (n >= 1000) {
-      return Math
-        .round(n)
-        .toLocaleString();
+      return Math.round(n).toLocaleString();
     }
 
-    if (n >= 100) {
-      return Math
-        .round(n)
-        .toString();
-    }
-
-    return trimZero(
-      n,
-      1
-    );
+    return trimNumber(n, 1);
   }
 
-  function formatAge(
-    ageDays,
-    source
-  ) {
-    if (
-      source === '默认估算'
-    ) {
-      return '默认';
+
+  // =========================
+  // 问题时间
+  // =========================
+
+  function getQuestionAgeDays() {
+    const qid =
+      location.pathname.match(
+        /^\/question\/(\d+)/
+      )?.[1];
+
+    if (!qid) {
+      return CFG.defaultAgeDays;
     }
 
-    if (ageDays < 1) {
-      return '今天';
+    const sources = [];
+
+    const initial =
+      document.getElementById(
+        'js-initialData'
+      )?.textContent;
+
+    if (initial) {
+      sources.push(initial);
     }
 
-    if (ageDays < 30) {
-      return (
-        `${Math.round(ageDays)}天`
-      );
+    for (const script of document.scripts) {
+      const text =
+        script.textContent || '';
+
+      if (
+        text.includes(qid) &&
+        text.includes('created')
+      ) {
+        sources.push(text);
+      }
+
+      if (sources.length >= 4) {
+        break;
+      }
     }
 
-    if (ageDays < 365) {
-      return (
-        `${trimZero(
-          ageDays / 30,
-          1
-        )}月`
-      );
+    for (const text of sources) {
+      const index =
+        text.indexOf(qid);
+
+      const chunk =
+        index >= 0
+          ? text.slice(
+              Math.max(0, index - 8000),
+              index + 12000
+            )
+          : text;
+
+      const m =
+        chunk.match(
+          /"created"\s*:\s*(\d{10,13})/
+        );
+
+      if (!m) continue;
+
+      let ts = Number(m[1]);
+
+      if (ts > 1000000000000) {
+        ts /= 1000;
+      }
+
+      const days =
+        (
+          Date.now() -
+          ts * 1000
+        ) / 86400000;
+
+      if (
+        days >= 0 &&
+        days < 10000
+      ) {
+        return days;
+      }
     }
 
-    return (
-      `${trimZero(
-        ageDays / 365,
-        1
-      )}年`
-    );
+    return CFG.defaultAgeDays;
   }
 
-  function getAgeLevel(
-    ageDays,
-    source
-  ) {
-    if (
-      source === '默认估算'
-    ) {
-      return '默认';
-    }
 
-    if (ageDays <= 30) {
-      return '新';
-    }
+  // =========================
+  // 评分
+  // =========================
 
-    if (ageDays <= 180) {
-      return '较新';
-    }
-
-    if (ageDays <= 365) {
-      return '中';
-    }
-
-    if (ageDays <= 1095) {
-      return '旧';
-    }
-
-    return '很旧';
-  }
-
-  function calcAnswerScore({
+  function calcScore(
     views,
     answers,
     follows,
     ageDays
-  }) {
-    const safeViews =
-      Math.max(
-        views,
-        0
-      );
-
-    const safeAnswers =
-      Math.max(
-        answers,
-        0
-      );
-
-    const safeFollows =
-      Math.max(
-        follows,
-        0
-      );
-
-    const safeAgeDays =
-      Math.max(
-        ageDays,
-        0
-      );
-
+  ) {
     const demand =
       Math.log10(
-        safeViews + 10
+        views + 10
       );
 
     const followBoost =
       Math.log10(
-        safeFollows + 10
+        follows + 10
       );
 
     const competition =
       1 /
       Math.sqrt(
-        safeAnswers + 3
+        answers + 3
       );
 
     const freshness =
       1 /
       Math.sqrt(
         1 +
-        safeAgeDays /
-          CONFIG.FRESHNESS_BASE_DAYS
+        ageDays /
+          CFG.freshnessBaseDays
       );
 
     const volumeWeight =
-      safeViews /
+      views /
       (
-        safeViews +
-        CONFIG.VOLUME_BASE
+        views +
+        CFG.volumeBase
       );
 
     return (
@@ -642,79 +332,65 @@
     );
   }
 
-  function getAnswerLevel(score) {
+  function answerLevel(score) {
     if (
       score >=
-      CONFIG.ANSWER_EXTREME
+      CFG.answer.extreme
     ) {
-      return {
-        text: '极高',
-        shortLabel: '极高',
-        fullLabel: '极高机会',
-        className:
-          'zh-opportunity-extreme'
-      };
+      return [
+        '极高',
+        '极高机会',
+        'zh-opportunity-extreme'
+      ];
     }
 
     if (
       score >=
-      CONFIG.ANSWER_HIGH
+      CFG.answer.high
     ) {
-      return {
-        text: '高',
-        shortLabel: '高机',
-        fullLabel: '高机会',
-        className:
-          'zh-opportunity-high'
-      };
+      return [
+        '高',
+        '高机会',
+        'zh-opportunity-high'
+      ];
     }
 
     if (
       score >=
-      CONFIG.ANSWER_MID
+      CFG.answer.mid
     ) {
-      return {
-        text: '中',
-        shortLabel: '中机',
-        fullLabel: '中机会',
-        className:
-          'zh-opportunity-mid'
-      };
+      return [
+        '中',
+        '中机会',
+        'zh-opportunity-mid'
+      ];
     }
 
-    return {
-      text: '低',
-      shortLabel: '低机',
-      fullLabel: '低机会',
-      className:
-        'zh-opportunity-low'
-    };
+    return [
+      '低',
+      '低机会',
+      'zh-opportunity-low'
+    ];
   }
 
-  function getGapLevel(gap) {
-    if (
-      !Number.isFinite(gap)
-    ) {
-      return '低';
-    }
-
+  function gapLevel(gap) {
     if (
       gap >=
-      CONFIG.GAP_EXTREME
+      CFG.gap.extreme
     ) {
       return '极高';
     }
 
     if (
       gap >=
-      CONFIG.GAP_HIGH
+      CFG.gap.high
     ) {
       return '高';
     }
 
     if (
       gap >=
-      CONFIG.GAP_MID
+      CFG.gap.mid
     ) {
       return '中';
     }
@@ -722,12 +398,16 @@
     return '低';
   }
 
-  function createBadge({
+
+  // =========================
+  // 胶囊
+  // =========================
+
+  function makeBadge({
     views,
     answers,
     follows,
     ageDays,
-    ageSource,
     compact = false
   }) {
     const gap =
@@ -736,35 +416,18 @@
         : views;
 
     const score =
-      calcAnswerScore({
+      calcScore(
         views,
         answers,
         follows,
         ageDays
-      });
-
-    const answerLevel =
-      getAnswerLevel(score);
-
-    const gapLevel =
-      getGapLevel(gap);
-
-    const gapText =
-      answers > 0
-        ? formatNumber(gap)
-        : '无回答';
-
-    const ageText =
-      formatAge(
-        ageDays,
-        ageSource
       );
 
-    const ageLevel =
-      getAgeLevel(
-        ageDays,
-        ageSource
-      );
+    const [
+      level,
+      fullLabel,
+      className
+    ] = answerLevel(score);
 
     const badge =
       document.createElement(
@@ -772,387 +435,68 @@
       );
 
     badge.className =
-      `${
+      `zh-opportunity-badge ${className}` +
+      (
         compact
-          ? 'zh-opportunity-badge'
-          : 'zh-opportunity-question-badge'
-      } ${answerLevel.className}`;
+          ? ' zh-opportunity-inline'
+          : ''
+      );
 
     badge.title = [
-      `浏览数：${Math.round(
-        views
-      ).toLocaleString()}`,
-
-      `回答数：${Math.round(
-        answers
-      ).toLocaleString()}`,
-
-      `关注数：${Math.round(
-        follows
-      ).toLocaleString()}`,
-
-      `提问时间：${ageText}`,
-      `时间来源：${ageSource}`,
-      `时效等级：${ageLevel}`,
-
-      '',
-
-      `缺口值：${gapText}`,
-      `缺口等级：${gapLevel}`,
-
-      `答题分：${score.toFixed(
-        1
-      )}`,
-
-      `答题等级：${answerLevel.text}`,
-
-      '',
-
-      '缺口值 = 浏览数 / 回答数',
-
-      '答题分 = 100 × log10(浏览+10) × log10(关注+10) × 流量池权重 × 时间新鲜度 / sqrt(回答+3)'
+      `浏览数：${Math.round(views).toLocaleString()}`,
+      `回答数：${Math.round(answers).toLocaleString()}`,
+      `关注数：${Math.round(follows).toLocaleString()}`,
+      `缺口值：${formatNumber(gap)}`,
+      `答题分：${score.toFixed(1)}`
     ].join('\n');
 
-    const ageHtml =
-      CONFIG.SHOW_AGE_IN_BADGE
-        ? `
-          <span class="zh-opportunity-sep">｜</span>
-          <span>
-            时效
-            <span class="zh-opportunity-strong">
-              ${ageLevel}
-            </span>
-          </span>
-        `
-        : '';
+    badge.innerHTML = `
+      <span>
+        ${compact ? level : fullLabel}
+      </span>
 
-    if (compact) {
-      badge.innerHTML = `
-        <span>
-          ${answerLevel.shortLabel}
+      <span class="zh-opportunity-sep">
+        ｜
+      </span>
+
+      <span>
+        缺口
+        <span class="zh-opportunity-strong">
+          ${formatNumber(gap)}
         </span>
-
-        <span class="zh-opportunity-sep">
-          ｜
+        <span class="zh-opportunity-small">
+          ${gapLevel(gap)}
         </span>
+      </span>
 
-        <span>
-          缺口
-          <span class="zh-opportunity-strong">
-            ${gapText}
-          </span>
-          <span class="zh-opportunity-small">
-            ${gapLevel}
-          </span>
+      <span class="zh-opportunity-sep">
+        ｜
+      </span>
+
+      <span>
+        答题${compact ? '' : '分'}
+        <span class="zh-opportunity-strong">
+          ${score.toFixed(0)}
         </span>
-
-        <span class="zh-opportunity-sep">
-          ｜
+        <span class="zh-opportunity-small">
+          ${level}
         </span>
-
-        <span>
-          答题
-          <span class="zh-opportunity-strong">
-            ${score.toFixed(0)}
-          </span>
-          <span class="zh-opportunity-small">
-            ${answerLevel.text}
-          </span>
-        </span>
-
-        ${ageHtml}
-      `;
-    } else {
-      badge.innerHTML = `
-        <span>
-          ${answerLevel.fullLabel}
-        </span>
-
-        <span class="zh-opportunity-sep">
-          ｜
-        </span>
-
-        <span>
-          缺口
-          <span class="zh-opportunity-strong">
-            ${gapText}
-          </span>
-          <span class="zh-opportunity-small">
-            ${gapLevel}
-          </span>
-        </span>
-
-        <span class="zh-opportunity-sep">
-          ｜
-        </span>
-
-        <span>
-          答题分
-          <span class="zh-opportunity-strong">
-            ${score.toFixed(0)}
-          </span>
-          <span class="zh-opportunity-small">
-            ${answerLevel.text}
-          </span>
-        </span>
-
-        ${ageHtml}
-      `;
-    }
+      </span>
+    `;
 
     return badge;
   }
 
-  // -------------------------
-  // 创作中心
-  // -------------------------
 
-  function parseCreatorMetrics(
-    text
-  ) {
-    if (
-      !text ||
-      text.length > 300
-    ) {
-      return null;
-    }
+  // =========================
+  // 最新版知乎问题页
+  // =========================
 
-    const views =
-      extractMetric(
-        text,
-        [
-          '被浏览',
-          '浏览'
-        ]
-      );
-
-    const answers =
-      extractMetric(
-        text,
-        [
-          '回答'
-        ]
-      );
-
-    const follows =
-      extractMetric(
-        text,
-        [
-          '关注者',
-          '关注'
-        ]
-      );
-
-    if (
-      views === null ||
-      answers === null ||
-      follows === null
-    ) {
-      return null;
-    }
-
-    return {
-      views,
-      answers,
-      follows
-    };
-  }
-
-  function hasCreatorMetricChild(
-    el
-  ) {
-    return Array
-      .from(el.children)
-      .some(child => {
-        if (
-          child.classList &&
-          child.classList.contains(
-            'zh-opportunity-badge'
-          )
-        ) {
-          return false;
-        }
-
-        return Boolean(
-          parseCreatorMetrics(
-            child.innerText || ''
-          )
-        );
-      });
-  }
-
-  function processCreatorList() {
-    if (!isCreatorPage()) {
-      return;
-    }
-
-    const elements =
-      Array.from(
-        document.querySelectorAll(
-          'div, span, p, li'
-        )
-      );
-
-    for (const el of elements) {
-      if (
-        el.dataset
-          .zhOpportunityDone === '1'
-      ) {
-        continue;
-      }
-
-      const text =
-        el.innerText || '';
-
-      const metrics =
-        parseCreatorMetrics(text);
-
-      if (!metrics) {
-        continue;
-      }
-
-      if (
-        hasCreatorMetricChild(el)
-      ) {
-        continue;
-      }
-
-      if (
-        metrics.views <= 0
-      ) {
-        continue;
-      }
-
-      const parsedAge =
-        parseAgeDays(text);
-
-      const ageDays =
-        parsedAge === null
-          ? 180
-          : parsedAge;
-
-      const ageSource =
-        parsedAge === null
-          ? '默认估算'
-          : '页面显示';
-
-      const badge =
-        createBadge({
-          ...metrics,
-          ageDays,
-          ageSource,
-          compact: true
-        });
-
-      el.appendChild(badge);
-
-      el.dataset
-        .zhOpportunityDone = '1';
-    }
-  }
-
-  // -------------------------
-  // 普通问题页
-  // -------------------------
-
-  function parseQuestionStatsText(
-    text
-  ) {
-    if (!text) {
-      return null;
-    }
-
-    const views =
-      extractMetric(
-        text,
-        [
-          '被浏览',
-          '浏览'
-        ]
-      );
-
-    const follows =
-      extractMetric(
-        text,
-        [
-          '关注者',
-          '关注'
-        ]
-      );
-
-    if (
-      views === null ||
-      follows === null
-    ) {
-      return null;
-    }
-
-    return {
-      views,
-      follows
-    };
-  }
-
-  function findQuestionStatsBox() {
-    /*
-     * 旧版 UI：
-     *
-     * 关注者
-     * 262
-     *
-     * 被浏览
-     * 87.8万
-     */
-    const legacySelectors = [
-      '.QuestionHeader-side .NumberBoard',
-
-      '.QuestionHeader-side [class*="NumberBoard"]',
-
-      '[class*="QuestionHeader-side"] [class*="NumberBoard"]',
-
-      '.NumberBoard'
-    ];
-
-    for (
-      const selector
-      of legacySelectors
-    ) {
-      const elements =
-        Array.from(
-          document.querySelectorAll(
-            selector
-          )
-        );
-
-      for (const el of elements) {
-        const metrics =
-          parseQuestionStatsText(
-            el.innerText || ''
-          );
-
-        if (metrics) {
-          return {
-            el,
-            ...metrics
-          };
-        }
-      }
-    }
-
-    /*
-     * 新版 UI：
-     *
-     * 262 关注
-     * 87.8 万浏览
-     *
-     * 不依赖知乎 CSS 类名。
-     * 选择同时包含“关注”和“浏览”
-     * 且文字最短的容器。
-     */
+  function findQuestionStats() {
     const candidates =
       Array.from(
         document.querySelectorAll(
-          'div, section, header, aside, nav'
+          'div, span, section, header, nav'
         )
       )
         .map(el => {
@@ -1163,24 +507,37 @@
 
           if (
             !text ||
-            text.length > 260
+            text.length > 220 ||
+            !text.includes('关注') ||
+            !text.includes('浏览')
           ) {
             return null;
           }
 
-          const metrics =
-            parseQuestionStatsText(
-              text
+          const follows =
+            readMetric(
+              text,
+              '关注'
             );
 
-          if (!metrics) {
+          const views =
+            readMetric(
+              text,
+              '浏览'
+            );
+
+          if (
+            follows === null ||
+            views === null
+          ) {
             return null;
           }
 
           return {
             el,
             text,
-            ...metrics
+            follows,
+            views
           };
         })
         .filter(Boolean)
@@ -1190,237 +547,104 @@
             b.text.length
         );
 
-    return (
-      candidates[0] ||
-      null
-    );
+    return candidates[0] || null;
   }
 
-  function parseAnswerCountText(
-    text
-  ) {
-    if (!text) {
-      return null;
-    }
+  function findAnswerAnchor() {
+    const root =
+      document.querySelector(
+        'main'
+      ) || document;
 
-    const patterns = [
-      /([\d,.]+)\s*([万亿]?)\s*(?:个\s*)?回答/,
-
-      /回答(?:数)?\s*[:：]?\s*([\d,.]+)\s*([万亿]?)/
-    ];
-
-    for (const re of patterns) {
-      const match =
-        text.match(re);
-
-      if (!match) {
-        continue;
-      }
-
-      return toNumber(
-        match[1],
-        match[2]
-      );
-    }
-
-    if (
-      /暂无回答|还没有回答|尚无回答/
-        .test(text)
-    ) {
-      return 0;
-    }
-
-    return null;
-  }
-
-  function extractQuestionAnswerCount() {
-    /*
-     * 旧版优先：
-     * List-headerText
-     */
-    const preferredSelectors = [
-      '.Question-mainColumn .List-headerText',
-
-      '.Question-mainColumn [class*="List-headerText"]',
-
-      '[class*="Question-mainColumn"] [class*="List-headerText"]',
-
-      '.List-headerText'
-    ];
-
-    for (
-      const selector
-      of preferredSelectors
-    ) {
-      const elements =
-        Array.from(
-          document.querySelectorAll(
-            selector
-          )
-        );
-
-      for (const el of elements) {
-        const n =
-          parseAnswerCountText(
+    const candidates =
+      Array.from(
+        root.querySelectorAll(
+          'h1, h2, h3, div, span, p'
+        )
+      )
+        .map(el => ({
+          el,
+          text:
             (
               el.innerText || ''
             ).trim()
-          );
-
-        if (n !== null) {
-          return n;
-        }
-      }
-    }
-
-    /*
-     * 新版：
-     * 例如“64 个回答”
-     *
-     * 优先只在主内容区域搜索，
-     * 避免误读右侧相关问题。
-     */
-    const roots = [
-      document.querySelector(
-        '.Question-mainColumn'
-      ),
-
-      document.querySelector(
-        '[class*="Question-mainColumn"]'
-      ),
-
-      document.querySelector(
-        'main'
-      )
-    ].filter(Boolean);
-
-    for (const root of roots) {
-      const texts =
-        Array.from(
-          root.querySelectorAll(
-            'h1, h2, h3, div, span, p'
-          )
+        }))
+        .filter(
+          item =>
+            item.text.length <= 30 &&
+            /^([\d,.]+)\s*([万亿]?)\s*个回答$/
+              .test(item.text)
         )
-          .map(
-            el =>
-              (
-                el.innerText || ''
-              ).trim()
-          )
-          .filter(
-            text =>
-              text &&
-              text.length <= 40
-          )
-          .sort(
-            (a, b) =>
-              a.length -
-              b.length
-          );
+        .sort(
+          (a, b) =>
+            a.text.length -
+            b.text.length
+        );
 
-      for (const text of texts) {
-        const n =
-          parseAnswerCountText(
-            text
-          );
+    return candidates[0] || null;
+  }
 
-        if (n !== null) {
-          return n;
-        }
-      }
-    }
-
+  function cleanupQuestionPage() {
     /*
-     * 找不到就是 null。
-     *
-     * 注意：
-     * null 代表“没有成功解析”，
-     * 绝不能当成“0 个回答”。
+     * 清掉旧版本曾经塞进顶部操作栏的胶囊。
+     * 当前版本自己的胶囊位于 ROW_ID 中，不删除。
      */
-    return null;
+    document
+      .querySelectorAll(
+        '.zh-opportunity-question-badge, .zh-opportunity-badge'
+      )
+      .forEach(el => {
+        if (
+          !el.closest(
+            `#${ROW_ID}`
+          )
+        ) {
+          el.remove();
+        }
+      });
   }
 
   function processQuestionPage() {
-    if (!isQuestionPage()) {
-      const oldBadge =
-        document.getElementById(
-          BADGE_ID
-        );
-
-      if (oldBadge) {
-        oldBadge.remove();
-      }
-
-      lastQuestionPath = '';
-
-      return;
-    }
+    cleanupQuestionPage();
 
     /*
-     * 知乎是 SPA。
-     * 用户直接切换问题时，
-     * 删除旧问题留下的 badge。
+     * 已经显示，就不要再生成第二个。
      */
     if (
-      lastQuestionPath !==
-      location.pathname
-    ) {
-      const oldBadge =
-        document.getElementById(
-          BADGE_ID
-        );
-
-      if (oldBadge) {
-        oldBadge.remove();
-      }
-
-      lastQuestionPath =
-        location.pathname;
-    }
-
-    if (
       document.getElementById(
-        BADGE_ID
+        ROW_ID
       )
     ) {
       return;
     }
 
     const stats =
-      findQuestionStatsBox();
+      findQuestionStats();
 
-    if (!stats) {
-      return;
-    }
+    const answer =
+      findAnswerAnchor();
 
-    const answers =
-      extractQuestionAnswerCount();
-
-    /*
-     * 最重要的修复：
-     *
-     * 找不到回答数时，
-     * 不再默认按 0 计算。
-     */
     if (
-      stats.views === null ||
-      stats.follows === null ||
-      answers === null
+      !stats ||
+      !answer
     ) {
       return;
     }
 
+    const answers =
+      readAnswers(
+        answer.text
+      );
+
     if (
+      answers === null ||
       stats.views <= 0
     ) {
       return;
     }
 
-    const age =
-      extractQuestionAgeDays();
-
     const badge =
-      createBadge({
+      makeBadge({
         views:
           stats.views,
 
@@ -1430,68 +654,215 @@
           stats.follows,
 
         ageDays:
-          age.ageDays,
-
-        ageSource:
-          age.source,
-
-        compact: false
+          getQuestionAgeDays()
       });
 
-    badge.id =
-      BADGE_ID;
+    const row =
+      document.createElement(
+        'div'
+      );
 
-    stats.el.appendChild(
+    row.id =
+      ROW_ID;
+
+    row.appendChild(
       badge
     );
+
+    /*
+     * 关键：
+     * 胶囊不再放进顶部“关注/浏览/分享”操作栏。
+     *
+     * 而是作为独立一行，
+     * 插在“XX 个回答”标题之前。
+     */
+    const host =
+      answer.el.closest(
+        '.List-header, [class*="List-header"]'
+      ) ||
+      answer.el;
+
+    if (
+      !host.parentElement
+    ) {
+      return;
+    }
+
+    host.parentElement.insertBefore(
+      row,
+      host
+    );
   }
+
+
+  // =========================
+  // 创作中心
+  // =========================
+
+  function readCreatorMetrics(
+    text
+  ) {
+    if (
+      !text ||
+      text.length > 260
+    ) {
+      return null;
+    }
+
+    const views =
+      readMetric(
+        text,
+        '浏览'
+      );
+
+    const follows =
+      readMetric(
+        text,
+        '关注'
+      );
+
+    const answers =
+      readMetric(
+        text,
+        '回答'
+      );
+
+    if (
+      views === null ||
+      follows === null ||
+      answers === null
+    ) {
+      return null;
+    }
+
+    return {
+      views,
+      follows,
+      answers
+    };
+  }
+
+  function processCreatorPage() {
+    for (
+      const el
+      of document.querySelectorAll(
+        'div, li'
+      )
+    ) {
+      if (
+        el.dataset
+          .zhOpportunityDone === '1'
+      ) {
+        continue;
+      }
+
+      const text =
+        (
+          el.innerText || ''
+        ).trim();
+
+      const metrics =
+        readCreatorMetrics(
+          text
+        );
+
+      if (
+        !metrics ||
+        metrics.views <= 0
+      ) {
+        continue;
+      }
+
+      const childAlreadyMatches =
+        Array.from(
+          el.children
+        ).some(
+          child =>
+            Boolean(
+              readCreatorMetrics(
+                (
+                  child.innerText ||
+                  ''
+                ).trim()
+              )
+            )
+        );
+
+      if (
+        childAlreadyMatches
+      ) {
+        continue;
+      }
+
+      el.appendChild(
+        makeBadge({
+          ...metrics,
+          ageDays:
+            CFG.defaultAgeDays,
+          compact: true
+        })
+      );
+
+      el.dataset
+        .zhOpportunityDone = '1';
+    }
+  }
+
+
+  // =========================
+  // 运行
+  // =========================
 
   function process() {
     addStyle();
 
     /*
-     * 两种页面彻底分开，
-     * 不再让创作中心解析器
-     * 在问题页执行。
+     * 知乎 SPA 切换问题时，
+     * 删除上一题留下的胶囊。
      */
-    if (isCreatorPage()) {
-      processCreatorList();
-      return;
+    if (
+      location.pathname !==
+      lastPath
+    ) {
+      document
+        .getElementById(
+          ROW_ID
+        )
+        ?.remove();
+
+      lastPath =
+        location.pathname;
     }
 
-    if (isQuestionPage()) {
+    if (
+      isQuestionPage()
+    ) {
       processQuestionPage();
       return;
     }
 
-    const oldBadge =
-      document.getElementById(
-        BADGE_ID
-      );
-
-    if (oldBadge) {
-      oldBadge.remove();
+    if (
+      isCreatorPage()
+    ) {
+      processCreatorPage();
     }
   }
 
-  function scheduleProcess() {
+  function schedule() {
     clearTimeout(timer);
 
     timer =
       setTimeout(
         process,
-        400
+        300
       );
   }
 
   process();
 
-  const observer =
-    new MutationObserver(
-      scheduleProcess
-    );
-
-  observer.observe(
+  new MutationObserver(
+    schedule
+  ).observe(
     document.body,
     {
       childList: true,
