@@ -1,5 +1,19 @@
 # Changelog
 
+## v0.2.0 - 2026-08-26
+
+### Changed
+
+- Updated `Zhihu Question Opportunity Score` from `1.5.1` to `1.6.3`.
+- Adapted to Zhihu's latest question-page UI.
+- Added support for individual answer pages (`/question/.../answer/...`).
+- Moved the opportunity badge to a floating top-right position to avoid affecting Zhihu's original layout.
+
+### Fixed
+
+- Fixed incorrect "0 answers" detection after Zhihu UI changes.
+- Fixed duplicate opportunity badges on question pages.
+- Fixed page layout compression caused by injecting the badge into Zhihu's native action bar.
 
 ## v0.1.1 - 2026-06-17
 
