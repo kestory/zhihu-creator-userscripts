@@ -248,8 +248,6 @@ https://www.zhihu.com/creator/manage/creation*
 
 [![kestory/zhihu-creator-userscripts Git Commit History GitStock K-Line Chart](https://gitstock.org/kestory/zhihu-creator-userscripts/stock.svg)](https://gitstock.org/kestory/zhihu-creator-userscripts)
 
-## Star History
-
 
 ## License
 
