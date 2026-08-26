@@ -734,12 +734,12 @@
 
     const width =
       badge.offsetWidth || 230;
-
+    
+    // 胶囊右边框与头像右边框对齐
     let left =
-      rect.left +
-      rect.width / 2 -
-      width / 2;
-
+      rect.right -
+      width;
+    
     left =
       Math.max(
         10,
