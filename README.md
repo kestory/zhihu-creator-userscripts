@@ -244,6 +244,12 @@ https://www.zhihu.com/creator/manage/creation*
 
 [![GitHub stars](https://img.shields.io/github/stars/kestory/zhihu-creator-userscripts?style=social)](https://github.com/kestory/zhihu-creator-userscripts/stargazers)
 
+## Development Activity
+
+[![kestory/zhihu-creator-userscripts Git Commit History GitStock K-Line Chart](https://gitstock.org/kestory/zhihu-creator-userscripts/stock.svg)](https://gitstock.org/kestory/zhihu-creator-userscripts)
+
+## Star History
+
 
 ## License
 
