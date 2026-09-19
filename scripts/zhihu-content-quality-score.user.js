@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         知乎内容质量分 Simple
 // @namespace    https://github.com/kestory/zhihu-creator-userscripts
-// @version      1.3.1
+// @version      1.3.2
 // @description  在知乎创作中心内容管理页显示简单质效分
 // @match        *://www.zhihu.com/creator/manage/creation*
 // @run-at       document-idle
@@ -23,19 +23,24 @@
   };
 
   function addStyle() {
-    if (document.getElementById('zh-quality-simple-style')) return;
+    if (document.getElementById('zh-quality-simple-style-v132')) return;
 
     const style = document.createElement('style');
-    style.id = 'zh-quality-simple-style';
+    style.id = 'zh-quality-simple-style-v132';
     style.textContent = `
       .zh-quality-simple-row {
         margin-top: 6px;
         margin-bottom: 4px;
+        min-width: 0;
+        max-width: 100%;
+        overflow-x: auto;
       }
 
       .zh-quality-simple-badge {
         display: inline-flex;
         align-items: center;
+        flex-wrap: nowrap;
+        width: max-content;
         gap: 5px;
         padding: 3px 9px;
         border-radius: 999px;
@@ -44,14 +49,31 @@
         line-height: 1.25;
         white-space: nowrap;
         border: 1px solid transparent;
+        box-sizing: border-box;
+      }
+
+      .zh-quality-field {
+        display: inline-flex;
+        align-items: baseline;
+      }
+
+      .zh-quality-label {
+        color: #607087;
+        font-weight: 500;
+      }
+
+      .zh-quality-level {
+        font-weight: 800;
       }
 
       .zh-quality-sep {
+        color: #607087;
         opacity: 0.55;
       }
 
       .zh-quality-strong {
-        font-weight: 900;
+        color: #0f172a;
+        font-weight: 800;
       }
 
       .zh-quality-extreme {
@@ -73,7 +95,7 @@
       }
 
       .zh-quality-low {
-        color: #64748b;
+        color: #607087;
         background: #f8fafc;
         border-color: #94a3b855;
       }
@@ -235,13 +257,13 @@
     ].join('\n');
 
     badge.innerHTML = `
-      <span>${level.label}</span>
+      <span class="zh-quality-field"><span class="zh-quality-label">等级：</span><span class="zh-quality-level">${level.label}</span></span>
       <span class="zh-quality-sep">｜</span>
-      <span>质效 <span class="zh-quality-strong">${score.toFixed(0)}</span></span>
+      <span class="zh-quality-field"><span class="zh-quality-label">质效分：</span><span class="zh-quality-strong">${score.toFixed(0)}</span></span>
       <span class="zh-quality-sep">｜</span>
-      <span>赞 <span class="zh-quality-strong">${formatPercent(agreeRate)}</span></span>
+      <span class="zh-quality-field"><span class="zh-quality-label">赞同率：</span><span class="zh-quality-strong">${formatPercent(agreeRate)}</span></span>
       <span class="zh-quality-sep">｜</span>
-      <span>藏 <span class="zh-quality-strong">${formatPercent(collectRate)}</span></span>
+      <span class="zh-quality-field"><span class="zh-quality-label">收藏率：</span><span class="zh-quality-strong">${formatPercent(collectRate)}</span></span>
     `;
 
     return badge;

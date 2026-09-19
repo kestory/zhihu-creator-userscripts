@@ -1,5 +1,23 @@
 # Changelog
 
+## v0.2.6 - 2026-09-19
+
+### Changed
+
+- Updated `Zhihu Content Quality Score` from `1.3.1` to `1.3.2`.
+- Keep the content quality badge on one line with explicit labels for level, quality score, upvote rate, and bookmark rate.
+- Keep the level-based background, border, and level text colors; use muted field names and dark numeric values.
+- Allow horizontal scrolling within narrow badge rows without wrapping or widening the content card.
+- Preserve scoring formulas, level thresholds, metric formatting, and the “待观察” label.
+
+### 中文
+
+- 将“知乎内容质量分”从 `1.3.1` 更新至 `1.3.2`。
+- 保持单行展示，统一为“等级：…｜质效分：…｜赞同率：…｜收藏率：…”。
+- 底色、边框和等级文字跟随质效等级，字段名使用灰色、数值使用深色。
+- 窄窗口可在标签区域横向滚动，避免换行或撑宽内容卡片。
+- 保留评分公式、等级阈值、数值格式和“待观察”文案。
+
 ## v0.2.5 - 2026-09-19
 
 ### Changed
