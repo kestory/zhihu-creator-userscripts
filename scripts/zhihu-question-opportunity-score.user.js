@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         知乎问题机会分 Pro
 // @namespace    https://github.com/kestory/zhihu-creator-userscripts
-// @version      1.6.8
+// @version      1.6.9
 // @description  在知乎待回答列表、问题页和回答详情页显示缺口值与答题分
 // @match        *://www.zhihu.com/creator*
 // @match        *://creator.zhihu.com/*
@@ -26,7 +26,7 @@
     defaultAgeDays: 180
   };
 
-  const STYLE_ID = 'zqo-style-v168';
+  const STYLE_ID = 'zqo-style-v169';
   const FLOAT_ID = 'zqo-question-float';
   const WAITING_ROW = 'zqo-waiting-row';
 
@@ -102,12 +102,18 @@
 
       .${WAITING_ROW}{
         margin-top:6px;
-        line-height:1
+        line-height:1;
+        min-width:0;
+        max-width:100%;
+        overflow-x:auto
       }
 
       .${WAITING_ROW} .zqo-pill{
         padding:3px 8px;
-        font-size:11px
+        font-size:12px;
+        margin-left:0;
+        flex-wrap:nowrap;
+        width:max-content
       }
 
       .zqo-inline{
@@ -360,7 +366,8 @@
     answers,
     follows,
     ageDays,
-    compact = false
+    compact = false,
+    labeled = false
   }) {
     const gap =
       answers > 0
@@ -386,11 +393,8 @@
 
     badge.className =
       `zqo-pill ${className}` +
-      (
-        compact
-          ? ' zqo-inline'
-          : ' zqo-detail'
-      );
+      (compact ? ' zqo-inline' : '') +
+      (!compact || labeled ? ' zqo-detail' : '');
 
     badge.title = [
       `浏览数：${Math.round(
@@ -410,7 +414,7 @@
       `答题分：${score.toFixed(1)}`
     ].join('\n');
 
-    if (!compact) {
+    if (!compact || labeled) {
       const gapLabel = gapLevel(gap);
       if (answers <= 0) {
         badge.title = badge.title.replace(
@@ -1043,7 +1047,8 @@
       row.appendChild(
         makeBadge({
           ...data,
-          compact: true
+          compact: true,
+          labeled: true
         })
       );
 

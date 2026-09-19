@@ -1,5 +1,24 @@
 # Changelog
 
+## v0.2.7 - 2026-09-19
+
+### Changed
+
+- Updated `Zhihu Question Opportunity Score` from `1.6.8` to `1.6.9`.
+- Give waiting-for-answer badges explicit single-line labels for opportunity level, gap value, and answer score.
+- Color each rating independently, keep numeric values dark, and retain the overall opportunity tint.
+- Show “无回答” without a gap rating when there are no answers.
+- Allow horizontal scrolling in narrow waiting-list rows without wrapping or widening cards.
+- Preserve scoring, floating badge positioning, and other creator-list badges.
+
+### 中文
+
+- 将“知乎问题机会分”从 `1.6.8` 更新至 `1.6.9`。
+- “等你来答”标签保持单行，统一为“机会等级：…｜缺口值：…｜答题分：…”。
+- 等级文字独立着色，数值使用深色，底色和边框跟随整体机会等级。
+- 无回答时不显示缺口等级；窄窗口支持标签区域横向滚动。
+- 保留评分公式、已确认的悬浮定位和其他创作中心列表标签。
+
 ## v0.2.6 - 2026-09-19
 
 ### Changed
