@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         知乎问题机会分 Pro
 // @namespace    https://github.com/kestory/zhihu-creator-userscripts
-// @version      1.6.5
+// @version      1.6.6
 // @description  在知乎待回答列表、问题页和回答详情页显示缺口值与答题分
 // @match        *://www.zhihu.com/creator*
 // @match        *://creator.zhihu.com/*
@@ -26,12 +26,14 @@
     defaultAgeDays: 180
   };
 
-  const STYLE_ID = 'zqo-style-v165';
+  const STYLE_ID = 'zqo-style-v166';
   const FLOAT_ID = 'zqo-question-float';
   const WAITING_ROW = 'zqo-waiting-row';
 
   let lastPath = location.pathname;
   let timer = null;
+  let detailStatsHost = null;
+  let positionFrame = null;
 
   const isDetail = () =>
     location.hostname === 'www.zhihu.com' &&
@@ -73,11 +75,13 @@
       }
 
       #${FLOAT_ID}{
-        position:fixed;
-        top:110px;
-        left:24px;
+        position:absolute;
+        top:0;
+        left:0;
         right:auto;
-        max-width:calc(100vw - 48px);
+        visibility:hidden;
+        width:max-content;
+        max-width:calc(100vw - 24px);
         flex-wrap:wrap;
         z-index:9999;
         box-shadow:0 2px 10px rgba(0,0,0,.08)
@@ -499,32 +503,26 @@
     return null;
   }
 
+  function findStatsHost() {
+    const candidates = root =>
+      Array.from(root.querySelectorAll('div,span,section,header,nav'))
+        .map(el => ({ el, text: (el.innerText || '').trim() }))
+        .filter(({ el, text }) => {
+          if (text.length > 240 ||
+              !text.includes('关注') || !text.includes('浏览')) return false;
+          const rect = el.getBoundingClientRect();
+          return rect.width > 0 && rect.height > 0;
+        })
+        .sort((a, b) => a.text.length - b.text.length);
+
+    // 优先使用问题头部的统计区，兼容没有这些类名的新版页面。
+    const header = document.querySelector('.QuestionHeader');
+    return (header && candidates(header)[0]?.el) ||
+      candidates(document)[0]?.el || null;
+  }
+
   function findStatsText() {
-    return (
-      Array.from(
-        document.querySelectorAll(
-          'div,span,section,header,nav'
-        )
-      )
-        .map(
-          el =>
-            (
-              el.innerText || ''
-            ).trim()
-        )
-        .filter(
-          text =>
-            text &&
-            text.length <= 240 &&
-            text.includes('关注') &&
-            text.includes('浏览')
-        )
-        .sort(
-          (a, b) =>
-            a.length -
-            b.length
-        )[0] || ''
-    );
+    return (findStatsHost()?.innerText || '').trim();
   }
 
   function findAnswerCountFromPage() {
@@ -684,6 +682,42 @@
     };
   }
 
+  function positionFloatingBadge() {
+    const badge = document.getElementById(FLOAT_ID);
+    if (!badge) return;
+
+    if (!detailStatsHost?.isConnected) {
+      badge.style.visibility = 'hidden';
+      return;
+    }
+
+    const rect = detailStatsHost.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0 || rect.bottom <= 0) {
+      badge.style.visibility = 'hidden';
+      return;
+    }
+
+    const width = badge.offsetWidth;
+    const viewportWidth = document.documentElement.clientWidth;
+    const left = Math.max(12, Math.min(
+      rect.right - width,
+      viewportWidth - width - 12
+    ));
+
+    // 对齐“关注者 / 被浏览”统计区右边缘，并放在统计区下方。
+    badge.style.left = `${Math.round(left + window.scrollX)}px`;
+    badge.style.top = `${Math.round(rect.bottom + window.scrollY + 12)}px`;
+    badge.style.visibility = 'visible';
+  }
+
+  function schedulePosition() {
+    if (positionFrame !== null) return;
+    positionFrame = requestAnimationFrame(() => {
+      positionFrame = null;
+      positionFloatingBadge();
+    });
+  }
+
   function cleanupLegacyDetailBadges() {
     document
       .querySelectorAll(
@@ -703,6 +737,7 @@
 
   function processDetail() {
     cleanupLegacyDetailBadges();
+    detailStatsHost = findStatsHost();
 
     let badge =
       document.getElementById(
@@ -725,6 +760,8 @@
         badge
       );
     }
+
+    positionFloatingBadge();
   }
 
   // =========================
@@ -971,6 +1008,7 @@
   }
 
   function cleanupInjected() {
+    detailStatsHost = null;
     document
       .getElementById(
         FLOAT_ID
@@ -1037,9 +1075,17 @@
 
   window.addEventListener(
     'resize',
-    schedule,
+    () => {
+      schedulePosition();
+      schedule();
+    },
     {
       passive: true
     }
   );
+
+  window.addEventListener('scroll', schedulePosition, {
+    passive: true,
+    capture: true
+  });
 })();

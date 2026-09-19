@@ -1,5 +1,19 @@
 # Changelog
 
+## v0.2.3 - 2026-09-19
+
+### Changed
+
+- Updated `Zhihu Question Opportunity Score` from `1.6.5` to `1.6.6`.
+- Anchor the question and answer detail badge 12px below the follower/view statistics, aligned with the statistics' right edge.
+- Follow the statistics when scrolling or resizing, and hide the badge until its anchor is available.
+
+### 中文
+
+- 将“知乎问题机会分”从 `1.6.5` 更新至 `1.6.6`。
+- 问题页和回答详情页的小框统一放在“关注者 / 被浏览”统计区下方 12px，右边缘与统计区对齐。
+- 小框随统计区滚动和缩放；统计区未加载时暂不显示。
+
 ## v0.2.2 - 2026-09-19
 
 ### Changed
