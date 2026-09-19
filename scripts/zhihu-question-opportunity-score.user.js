@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         知乎问题机会分 Pro
 // @namespace    https://github.com/kestory/zhihu-creator-userscripts
-// @version      1.6.4
+// @version      1.6.5
 // @description  在知乎待回答列表、问题页和回答详情页显示缺口值与答题分
 // @match        *://www.zhihu.com/creator*
 // @match        *://creator.zhihu.com/*
@@ -26,7 +26,7 @@
     defaultAgeDays: 180
   };
 
-  const STYLE_ID = 'zqo-style-v164';
+  const STYLE_ID = 'zqo-style-v165';
   const FLOAT_ID = 'zqo-question-float';
   const WAITING_ROW = 'zqo-waiting-row';
 
@@ -74,6 +74,11 @@
 
       #${FLOAT_ID}{
         position:fixed;
+        top:110px;
+        left:24px;
+        right:auto;
+        max-width:calc(100vw - 48px);
+        flex-wrap:wrap;
         z-index:9999;
         box-shadow:0 2px 10px rgba(0,0,0,.08)
       }
@@ -679,90 +684,6 @@
     };
   }
 
-  function findHeaderAvatar() {
-    const selectors = [
-      '.AppHeader-profile .Avatar',
-      '.AppHeader-profile img',
-      '[class*="AppHeader-profile"] img',
-      'header img.Avatar',
-      'header img[class*="Avatar"]'
-    ];
-
-    for (
-      const selector
-      of selectors
-    ) {
-      const el =
-        document.querySelector(
-          selector
-        );
-
-      if (el) {
-        return el;
-      }
-    }
-
-    return null;
-  }
-
-  function positionFloatingBadge() {
-    const badge =
-      document.getElementById(
-        FLOAT_ID
-      );
-
-    if (!badge) return;
-
-    const avatar =
-      findHeaderAvatar();
-
-    if (!avatar) {
-      badge.style.left =
-        'auto';
-
-      badge.style.right =
-        '24px';
-
-      badge.style.top =
-        '110px';
-
-      return;
-    }
-
-    const rect =
-      avatar.getBoundingClientRect();
-
-    const width =
-      badge.offsetWidth || 230;
-    
-    // 胶囊右边框与头像右边框对齐
-    let left =
-      rect.right -
-      width;
-    
-    left =
-      Math.max(
-        10,
-        Math.min(
-          left,
-          window.innerWidth -
-          width -
-          10
-        )
-      );
-
-    badge.style.right =
-      'auto';
-
-    badge.style.left =
-      `${Math.round(left)}px`;
-
-    badge.style.top =
-      `${Math.round(
-        rect.bottom + 10
-      )}px`;
-  }
-
   function cleanupLegacyDetailBadges() {
     document
       .querySelectorAll(
@@ -804,8 +725,6 @@
         badge
       );
     }
-
-    positionFloatingBadge();
   }
 
   // =========================

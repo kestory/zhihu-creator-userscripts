@@ -1,5 +1,19 @@
 # Changelog
 
+## v0.2.2 - 2026-09-19
+
+### Changed
+
+- Updated `Zhihu Question Opportunity Score` from `1.6.4` to `1.6.5`.
+- Fixed the floating badge to the same upper-left position on question and answer detail pages (24px from the left, 110px from the top).
+- Removed avatar-dependent positioning and allowed the badge to wrap on narrow screens.
+
+### 中文
+
+- 将“知乎问题机会分”从 `1.6.4` 更新至 `1.6.5`。
+- 问题页和回答详情页的小框统一固定在左上角（距左侧 24px、顶部 110px），不再随头像位置变化。
+- 窄屏下允许小框内容换行，避免超出窗口。
+
 
 ## v0.2.1 - 2026-08-26
 
