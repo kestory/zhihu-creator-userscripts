@@ -1,5 +1,23 @@
 # Changelog
 
+## v0.2.4 - 2026-09-19
+
+### Changed
+
+- Updated `Zhihu Question Opportunity Score` from `1.6.6` to `1.6.7`.
+- Keep the badge fixed beneath the header avatar while scrolling, beside the follower/view statistics when space permits.
+- Use a compact stacked layout in a narrow side gap; place it directly below the statistics when no side gap is available.
+- Select the smallest statistics container when several ancestors contain identical text.
+- Keep the badge visible even when the statistics scroll out of view or are removed.
+
+### 中文
+
+- 将“知乎问题机会分”从 `1.6.6` 更新至 `1.6.7`。
+- 小框固定在右上角、头像下方，下滚时保持可见；页顶优先紧贴统计区右侧。
+- 侧边空间较窄时分行展示；没有侧边空间时紧贴统计数字下方。
+- 修正相同统计文字匹配到整列外层容器、导致小框离数字过远的问题。
+- 统计区移出视野或被移除后，小框仍保持显示。
+
 ## v0.2.3 - 2026-09-19
 
 ### Changed

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         知乎问题机会分 Pro
 // @namespace    https://github.com/kestory/zhihu-creator-userscripts
-// @version      1.6.6
+// @version      1.6.7
 // @description  在知乎待回答列表、问题页和回答详情页显示缺口值与答题分
 // @match        *://www.zhihu.com/creator*
 // @match        *://creator.zhihu.com/*
@@ -26,7 +26,7 @@
     defaultAgeDays: 180
   };
 
-  const STYLE_ID = 'zqo-style-v166';
+  const STYLE_ID = 'zqo-style-v167';
   const FLOAT_ID = 'zqo-question-float';
   const WAITING_ROW = 'zqo-waiting-row';
 
@@ -34,6 +34,7 @@
   let timer = null;
   let detailStatsHost = null;
   let positionFrame = null;
+  let floatingPlacement = null;
 
   const isDetail = () =>
     location.hostname === 'www.zhihu.com' &&
@@ -75,16 +76,28 @@
       }
 
       #${FLOAT_ID}{
-        position:absolute;
-        top:0;
-        left:0;
-        right:auto;
+        position:fixed;
+        top:76px;
+        left:auto;
+        right:16px;
         visibility:hidden;
         width:max-content;
         max-width:calc(100vw - 24px);
         flex-wrap:wrap;
         z-index:9999;
         box-shadow:0 2px 10px rgba(0,0,0,.08)
+      }
+
+      #${FLOAT_ID}.zqo-stacked{
+        flex-direction:column;
+        align-items:flex-start;
+        gap:4px;
+        border-radius:12px;
+        padding:8px 10px
+      }
+
+      #${FLOAT_ID}.zqo-stacked .zqo-sep{
+        display:none
       }
 
       .${WAITING_ROW}{
@@ -513,7 +526,14 @@
           const rect = el.getBoundingClientRect();
           return rect.width > 0 && rect.height > 0;
         })
-        .sort((a, b) => a.text.length - b.text.length);
+        .sort((a, b) => {
+          const textDifference = a.text.length - b.text.length;
+          if (textDifference) return textDifference;
+          // 相同文字可能出现在整列外层容器中，选择紧贴数字的小容器。
+          const aRect = a.el.getBoundingClientRect();
+          const bRect = b.el.getBoundingClientRect();
+          return aRect.width * aRect.height - bRect.width * bRect.height;
+        });
 
     // 优先使用问题头部的统计区，兼容没有这些类名的新版页面。
     const header = document.querySelector('.QuestionHeader');
@@ -682,31 +702,91 @@
     };
   }
 
+  function findHeaderAvatar() {
+    const selectors = [
+      '.AppHeader-profile .Avatar',
+      '.AppHeader-profile img',
+      '[class*="AppHeader-profile"] img',
+      '.AppHeader img.Avatar',
+      'header img.Avatar'
+    ];
+
+    for (const selector of selectors) {
+      for (const avatar of document.querySelectorAll(selector)) {
+        const rect = avatar.getBoundingClientRect();
+        if (rect.width > 0 && rect.height > 0 &&
+            rect.top >= 0 && rect.bottom <= 160) return avatar;
+      }
+    }
+    return null;
+  }
+
   function positionFloatingBadge() {
     const badge = document.getElementById(FLOAT_ID);
     if (!badge) return;
 
-    if (!detailStatsHost?.isConnected) {
-      badge.style.visibility = 'hidden';
-      return;
-    }
-
-    const rect = detailStatsHost.getBoundingClientRect();
-    if (rect.width <= 0 || rect.height <= 0 || rect.bottom <= 0) {
-      badge.style.visibility = 'hidden';
-      return;
-    }
-
-    const width = badge.offsetWidth;
     const viewportWidth = document.documentElement.clientWidth;
-    const left = Math.max(12, Math.min(
-      rect.right - width,
-      viewportWidth - width - 12
-    ));
+    const viewportHeight = window.innerHeight;
+    const avatar = findHeaderAvatar();
+    const stats = detailStatsHost?.isConnected ? detailStatsHost : null;
+    const needsLayout = !floatingPlacement ||
+      floatingPlacement.viewportWidth !== viewportWidth ||
+      floatingPlacement.viewportHeight !== viewportHeight ||
+      (!floatingPlacement.hasStats && stats) ||
+      (!floatingPlacement.hasAvatar && avatar);
 
-    // 对齐“关注者 / 被浏览”统计区右边缘，并放在统计区下方。
-    badge.style.left = `${Math.round(left + window.scrollX)}px`;
-    badge.style.top = `${Math.round(rect.bottom + window.scrollY + 12)}px`;
+    if (needsLayout) {
+      badge.classList.remove('zqo-stacked');
+      badge.style.width = '';
+      const naturalWidth = badge.offsetWidth;
+      const avatarRect = avatar?.getBoundingClientRect();
+      const header = avatar?.closest('header,.AppHeader') ||
+        document.querySelector('.AppHeader');
+      const headerRect = header?.getBoundingClientRect();
+      const headerBottom = headerRect && headerRect.bottom > 0 &&
+        headerRect.bottom <= 160 ? headerRect.bottom : 0;
+      const right = Math.max(12, avatarRect
+        ? viewportWidth - avatarRect.right
+        : floatingPlacement?.right ?? 16);
+      const rightEdge = viewportWidth - right;
+      let top = Math.max(headerBottom, avatarRect?.bottom || 0) + 8;
+      if (top === 8) top = floatingPlacement?.top ?? 76;
+
+      let width = null;
+      let stacked = false;
+      const rect = stats?.getBoundingClientRect();
+      // 使用页顶坐标确定初始位置；滚动时保留窗口内的位置。
+      const statsTop = rect ? rect.top + window.scrollY : 0;
+      if (rect && rect.width > 0 && rect.height > 0 &&
+          statsTop >= 0 && statsTop <= top + 100) {
+        const available = Math.floor(rightEdge - rect.right - 8);
+        top = Math.max(top, statsTop);
+        if (available >= naturalWidth) {
+          // 右侧空间足够时保持单行胶囊。
+        } else if (available >= 130) {
+          // 空间较窄时分行，紧贴统计区右侧，不遮挡数字。
+          width = available;
+          stacked = true;
+        } else {
+          // 窄屏没有侧边空位时，紧贴数字下方，并继续固定悬浮。
+          top = Math.max(top, statsTop + rect.height + 6);
+        }
+      }
+
+      floatingPlacement = {
+        viewportWidth, viewportHeight, right, top, width, stacked,
+        hasStats: Boolean(stats), hasAvatar: Boolean(avatar)
+      };
+    }
+
+    const placement = floatingPlacement;
+    badge.classList.toggle('zqo-stacked', placement.stacked);
+    badge.style.width = placement.width ? `${placement.width}px` : '';
+    badge.style.left = 'auto';
+    badge.style.right = `${Math.round(placement.right)}px`;
+    badge.style.top = `${Math.round(Math.max(8, Math.min(
+      placement.top, viewportHeight - badge.offsetHeight - 12
+    )))}px`;
     badge.style.visibility = 'visible';
   }
 
@@ -1009,6 +1089,7 @@
 
   function cleanupInjected() {
     detailStatsHost = null;
+    floatingPlacement = null;
     document
       .getElementById(
         FLOAT_ID
