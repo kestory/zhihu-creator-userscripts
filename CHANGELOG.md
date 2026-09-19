@@ -1,5 +1,23 @@
 # Changelog
 
+## v0.2.5 - 2026-09-19
+
+### Changed
+
+- Updated `Zhihu Question Opportunity Score` from `1.6.7` to `1.6.8`.
+- Format the floating badge as labeled fields: opportunity level, gap value, and answer score.
+- Tint the background and border by the overall opportunity level, independently color each rating, and keep numeric values dark.
+- Show “无回答” without a gap rating when no answers exist, and explain this state in the tooltip.
+- Tighten spacing and font sizes in narrow side gaps without changing the positioning calculations or scoring formulas.
+
+### 中文
+
+- 将“知乎问题机会分”从 `1.6.7` 更新至 `1.6.8`。
+- 悬浮小框统一为“机会等级：… / 缺口值：… / 答题分：…”三项表述。
+- 底色与边框跟随整体机会等级，标签使用灰色、数值使用深色；各项等级独立着色：极高紫、高绿、中琥珀、低灰。
+- 没有回答时显示“缺口值：无回答”，隐藏缺口等级，并在悬浮提示中说明。
+- 窄侧栏适当收紧内边距和字号，保留已确认的定位计算与评分公式。
+
 ## v0.2.4 - 2026-09-19
 
 ### Changed

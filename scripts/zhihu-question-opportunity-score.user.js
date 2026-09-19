@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         知乎问题机会分 Pro
 // @namespace    https://github.com/kestory/zhihu-creator-userscripts
-// @version      1.6.7
+// @version      1.6.8
 // @description  在知乎待回答列表、问题页和回答详情页显示缺口值与答题分
 // @match        *://www.zhihu.com/creator*
 // @match        *://creator.zhihu.com/*
@@ -26,7 +26,7 @@
     defaultAgeDays: 180
   };
 
-  const STYLE_ID = 'zqo-style-v167';
+  const STYLE_ID = 'zqo-style-v168';
   const FLOAT_ID = 'zqo-question-float';
   const WAITING_ROW = 'zqo-waiting-row';
 
@@ -148,6 +148,49 @@
         color:#64748b;
         background:#f8fafc;
         border-color:#94a3b855
+      }
+
+      .zqo-pill.zqo-detail{
+        color:#334155
+      }
+
+      .zqo-detail-line{
+        display:inline-flex;
+        align-items:baseline
+      }
+
+      .zqo-detail .zqo-label{
+        color:#607087;
+        font-weight:500
+      }
+
+      .zqo-detail .zqo-number{
+        color:#0f172a;
+        font-weight:800
+      }
+
+      .zqo-detail .zqo-grade{
+        font-weight:800
+      }
+
+      .zqo-detail .zqo-metric-grade{
+        margin-left:3px;
+        font-size:11px
+      }
+
+      .zqo-detail [data-level="极高"]{color:#6d28d9}
+      .zqo-detail [data-level="高"]{color:#047857}
+      .zqo-detail [data-level="中"]{color:#b45309}
+      .zqo-detail [data-level="低"]{color:#607087}
+
+      #${FLOAT_ID}.zqo-stacked.zqo-narrow{
+        padding-left:6px;
+        padding-right:6px;
+        font-size:10px
+      }
+
+      #${FLOAT_ID}.zqo-narrow .zqo-metric-grade{
+        font-size:10px
       }
     `;
 
@@ -346,7 +389,7 @@
       (
         compact
           ? ' zqo-inline'
-          : ''
+          : ' zqo-detail'
       );
 
     badge.title = [
@@ -366,6 +409,31 @@
 
       `答题分：${score.toFixed(1)}`
     ].join('\n');
+
+    if (!compact) {
+      const gapLabel = gapLevel(gap);
+      if (answers <= 0) {
+        badge.title = badge.title.replace(
+          `缺口值：${formatNumber(gap)}`,
+          '缺口值：无回答，暂不计算浏览数与回答数的比值'
+        );
+      }
+
+      badge.innerHTML = `
+        <span class="zqo-detail-line">
+          <span class="zqo-label">机会等级：</span><span class="zqo-grade" data-level="${level}">${level}</span>
+        </span>
+        <span class="zqo-sep">｜</span>
+        <span class="zqo-detail-line">
+          <span class="zqo-label">缺口值：</span><span class="zqo-number">${answers > 0 ? formatNumber(gap) : '无回答'}</span>${answers > 0 ? `<span class="zqo-grade zqo-metric-grade" data-level="${gapLabel}">（${gapLabel}）</span>` : ''}
+        </span>
+        <span class="zqo-sep">｜</span>
+        <span class="zqo-detail-line">
+          <span class="zqo-label">答题分：</span><span class="zqo-number">${score.toFixed(0)}</span><span class="zqo-grade zqo-metric-grade" data-level="${level}">（${level}）</span>
+        </span>
+      `;
+      return badge;
+    }
 
     badge.innerHTML = `
       <span>
@@ -736,7 +804,7 @@
       (!floatingPlacement.hasAvatar && avatar);
 
     if (needsLayout) {
-      badge.classList.remove('zqo-stacked');
+      badge.classList.remove('zqo-stacked', 'zqo-narrow');
       badge.style.width = '';
       const naturalWidth = badge.offsetWidth;
       const avatarRect = avatar?.getBoundingClientRect();
@@ -781,6 +849,7 @@
 
     const placement = floatingPlacement;
     badge.classList.toggle('zqo-stacked', placement.stacked);
+    badge.classList.toggle('zqo-narrow', placement.stacked && placement.width < 150);
     badge.style.width = placement.width ? `${placement.width}px` : '';
     badge.style.left = 'auto';
     badge.style.right = `${Math.round(placement.right)}px`;
